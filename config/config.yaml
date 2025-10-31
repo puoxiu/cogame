@@ -1,0 +1,215 @@
+# 游戏服务器配置文件
+server:
+  # 服务器基础配置
+  name: "co-game-server"
+  version: "1.0.0"
+  debug: true
+  
+# 网络配置
+network:
+  tcp_port: 8001
+  rpc_port: 9001
+  http_port: 7001
+  max_connections: 10000
+  read_timeout: 30
+  write_timeout: 30
+
+redis:
+  # 单机模式配置
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+  
+  # 集群模式配置（可选）
+  cluster_mode: false
+  cluster_addrs:
+    - "127.0.0.1:7000"
+    - "127.0.0.1:7001"
+    - "127.0.0.1:7002"
+    - "127.0.0.1:7003"
+    - "127.0.0.1:7004"
+    - "127.0.0.1:7005"
+  
+  # 哨兵模式配置（可选）
+  sentinel_mode: false
+  sentinel_addrs:
+    - "127.0.0.1:26379"
+    - "127.0.0.1:26380"
+    - "127.0.0.1:26381"
+  sentinel_master: "mymaster"
+  
+  # 通用配置
+  pool_size: 100
+  max_retries: 3
+  dial_timeout: 5s
+  read_timeout: 3s
+  write_timeout: 3s
+  idle_timeout: 300s
+  
+  # 集群特有配置
+  max_redirects: 8
+  read_only: false
+  route_by_latency: true
+  route_randomly: false
+    
+mongodb:
+  # 单机模式
+  uri: "mongodb://127.0.0.1:27017"
+  database: "co_game"
+  
+  # 副本集模式配置（可选）
+  replica_set: false
+  replica_set_name: "rs0"
+  hosts:
+    - "127.0.0.1:27017"
+    - "127.0.0.1:27018"
+    - "127.0.0.1:27019"
+  auth_source: "admin"
+  username: ""
+  password: ""
+  
+  # 分片集群模式配置（可选）
+  sharded_cluster: false
+  mongos_hosts:
+    - "127.0.0.1:27017"
+    - "127.0.0.1:27018"
+  
+  # 连接配置
+  connect_timeout: 10s
+  max_pool_size: 100
+  min_pool_size: 5
+  max_conn_idle_time: 300s
+  
+  # 读写配置
+  read_preference: "primary"
+  write_concern: "majority"
+  read_concern: "local"
+  
+  # TLS配置
+  tls_enabled: false
+  tls_cert_file: ""
+  tls_key_file: ""
+  tls_ca_file: ""
+    
+# 消息队列配置
+nsq:
+  # 单节点模式配置
+  nsqd_address: "127.0.0.1:4150"
+  nsqlookupd_address: "127.0.0.1:4161"
+  
+  # 集群模式配置（可选）
+  cluster_mode: false
+  nsqd_addresses:
+    - "127.0.0.1:4150"
+    - "127.0.0.1:4152"
+    - "127.0.0.1:4154"
+  nsqlookupd_addresses:
+    - "127.0.0.1:4161"
+    - "127.0.0.1:4163"
+    - "127.0.0.1:4165"
+  
+  # 连接配置
+  max_in_flight: 200
+  dial_timeout: 1s
+  read_timeout: 60s
+  write_timeout: 1s
+  message_timeout: 60s
+  
+  # 集群配置
+  load_balancing: true
+  failover_enabled: true
+  health_check_interval: 30s
+  producer_pool_size: 10
+  
+# 服务发现配置
+etcd:
+  endpoints:
+    - "127.0.0.1:2379"
+    - "127.0.0.1:2380"
+    - "127.0.0.1:2381"
+  dial_timeout: 5s
+  username: ""
+  password: ""
+  
+  # TLS配置
+  tls_enabled: false
+  tls_cert_file: ""
+  tls_key_file: ""
+  tls_ca_file: ""
+  tls_insecure: false
+  
+  # 集群配置
+  auto_sync_interval: 30s
+  dial_keep_alive_time: 30s
+  dial_keep_alive_timeout: 5s
+  max_call_send_msg_size: 2097152   # 2MB
+  max_call_recv_msg_size: 4194304   # 4MB
+  
+# 日志配置
+log:
+  level: "debug"
+  format: "console"          # console 或 json
+  output: "stdout"           # stdout, stderr, file
+  file_path: "logs/co.log"
+  max_size: 100             # MB
+  max_backups: 5
+  max_age: 30               # 天
+  compress: true
+  development: true         # 开发模式，更详细的日志
+  disable_caller: false    # 是否禁用调用者信息
+  disable_stacktrace: false # 是否禁用堆栈跟踪
+  
+  # 采样配置（高流量时使用）
+  sampling:
+    initial: 100           # 初始采样数
+    thereafter: 100        # 后续每100条采样1条
+  
+# 节点配置
+nodes:
+  center:
+    count: 1
+    ports: [8010]
+    
+  gateway:
+    count: 2
+    ports: [8001, 8002]
+    
+  login:
+    count: 1
+    ports: [8020]
+    
+  lobby:
+    count: 1
+    ports: [8030]
+    
+  friend:
+    count: 1
+    ports: [8040]
+    
+  chat:
+    count: 1
+    ports: [8050]
+    
+  mail:
+    count: 1
+    ports: [8060]
+    
+  game:
+    count: 3
+    ports: [8100, 8101, 8102]
+    
+  gm:
+    count: 1
+    ports: [8200]
+
+# 对象池配置
+object_pool:
+  message_pool_size: 1000
+  connection_pool_size: 100
+  actor_pool_size: 500
+
+# RPC连接池配置
+rpc:
+  pool_size: 50
+  max_idle: 10
+  idle_timeout: 300

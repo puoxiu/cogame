@@ -1,0 +1,97 @@
+version: '3.8'
+
+networks:
+  co-network:
+    driver: bridge
+
+# volumes:
+#   redis-data:
+#   mongodb-data:
+#   etcd-data:
+
+services:
+  # 基础设施服务
+  redis:
+    image: redis:7-alpine
+    container_name: co-redis
+    ports:
+      - "6379:6379"
+    # volumes:
+    #   - redis-data:/data
+    networks:
+      - co-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  mongodb:
+    image: mongo:6.0
+    container_name: co-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: co_game
+    volumes:
+    #   - mongodb-data:/data/db
+      - ./scripts/login_mongodb.js:/docker-entrypoint-initdb.d/login_mongodb.js:ro
+    networks:
+      - co-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: co-etcd
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCD_NAME: etcd0
+      ETCD_DATA_DIR: /etcd-data
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_CLUSTER: etcd0=http://0.0.0.0:2380
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-cluster-1
+      ETCD_INITIAL_CLUSTER_STATE: new
+    # volumes:
+    #   - etcd-data:/etcd-data
+    networks:
+      - co-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  nsqlookupd:
+    image: nsqio/nsq:v1.2.1
+    container_name: co-nsqlookupd
+    command: /nsqlookupd
+    ports:
+      - "4160:4160"
+      - "4161:4161"
+    networks:
+      - co-network
+
+  nsqd:
+    image: nsqio/nsq:v1.2.1
+    container_name: co-nsqd
+    command: /nsqd --lookupd-tcp-address=nsqlookupd:4160
+    ports:
+      - "4150:4150"
+      - "4151:4151"
+    depends_on:
+      - nsqlookupd
+    networks:
+      - co-network
+
+  # co

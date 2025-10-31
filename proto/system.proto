@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package system_proto;
+
+option go_package = "github.com/puoxiu/cogame/pkg/system_proto";
+
+// 基础请求结构（复用已有定义，若不存在需补充）
+message BaseRequest {
+  string header = 1; // 透传的请求头（如会话ID、用户ID等）
+  bytes data = 2;    // 业务参数
+}
+
+// 基础响应结构
+message BaseResponse {
+  string header = 1; // 透传的响应头
+  int32 code = 2;    // 错误码（0为成功）
+  string msg = 3;    // 错误信息
+  bytes data = 4;    // 响应数据
+}
+
+// 服务器信息
+message NodeInfo {
+  string node_id = 1;
+  string node_type = 2;
+  string address = 3;
+  int32 port = 4;
+  bool online = 5;
+  int32 load = 6;
+  uint32 update_time = 7;
+}
+
+message MemoryStats {
+  uint64 alloc = 1;      // 对应 runtime.MemStats.Alloc
+  uint64 total_alloc = 2;// 对应 runtime.MemStats.TotalAlloc
+  uint64 sys = 3;        // 对应 runtime.MemStats.Sys
+  uint32 num_gc = 4;     // 对应 runtime.MemStats.NumGC
+}
+
+// 对应 Go 的 PoolStat 结构体
+message PoolStat {
+  string pool_name = 1; // 对应 PoolStat.Name
+  int32 size = 2;        // 对应 PoolStat.Size
+  int32 available = 3;   // 对应 PoolStat.Available
+  int64 created = 4;     // 对应 PoolStat.Created
+  int64 gotten = 5;      // 对应 PoolStat.Gotten
+  int64 put = 6;         // 对应 PoolStat.Put
+}
+
+// 对应 Go 的 ServerStats 结构体
+message ServerStats {
+  string node_id = 1;              // 对应 ServerStats.NodeID
+  string node_type = 2;            // 对应 ServerStats.NodeType
+  string status = 3;               // 对应 ServerStats.Status
+  int64 uptime = 4;                // 对应 ServerStats.Uptime（当前代码未赋值，后续可补充）
+  int32 load = 5;                  // 对应 ServerStats.Load
+  MemoryStats memory = 6;          // 对应 ServerStats.Memory
+  int32 goroutines = 7;            // 对应 ServerStats.Goroutines
+  int32 connections = 8;           // 对应 ServerStats.Connections
+  int32 actor_count = 9;           // 对应 ServerStats.ActorCount
+  int64 rpc_connections = 10;      // 对应 ServerStats.RPCConnections
+  map<string, PoolStat> pool_stats = 11; // 对应 ServerStats.PoolStats
+}
+
+
+// 系统服务定义
+service SystemService {
+  // 获取服务器信息
+  rpc GetServerInfo (BaseRequest) returns (BaseResponse);
+  // 获取服务器统计信息
+  rpc GetServerStats (BaseRequest) returns (BaseResponse);
+  // 重新加载配置
+  rpc ReloadConfig (BaseRequest) returns (BaseResponse);
+  // 更新服务器负载
+  rpc UpdateLoad (BaseRequest) returns (BaseResponse);
+  // 关闭服务器
+  rpc Shutdown (BaseRequest) returns (BaseResponse);
+  // 获取Actor统计信息
+  rpc GetActorStats (BaseRequest) returns (BaseResponse);
+  // 获取对象池统计信息
+  rpc GetPoolStats (BaseRequest) returns (BaseResponse);
+}
+
+// protoc --go_out=pkg/system_proto --go_opt=paths=source_relative --go-grpc_out=pkg/system_proto --go-grpc_opt=paths=source_relative proto/system.proto

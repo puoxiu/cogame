@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package login_proto;
+
+option go_package = "github.com/puoxiu/cogame/pkg/login_proto";
+
+// 已有的基础消息（保留并补充）
+message MessageHeader {
+  uint32 msg_id = 1;
+  uint32 seq = 2;
+  uint64 user_id = 3;
+  uint32 timestamp = 4;
+  string session_id = 5;
+}
+
+message BaseRequest {
+  MessageHeader header = 1;
+  bytes data = 2;
+}
+
+message BaseResponse {
+  MessageHeader header = 1;
+  int32 code = 2;
+  string msg = 3;
+  bytes data = 4;
+}
+
+// 登录请求（补充完整字段）
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string platform = 3;
+  string version = 4;
+}
+
+// 登录响应（复用已有结构，补充到 proto 定义中）
+message LoginResponse {
+  uint64 user_id = 1;
+  string token = 2;
+  string nickname = 3;
+  int32 level = 4;
+  int64 exp = 5;
+  int64 gold = 6;
+  int64 diamond = 7;
+}
+
+// 登出请求
+message LogoutRequest {
+  MessageHeader header = 1; // 包含 user_id 和 session_id
+}
+
+// 登出响应（复用 BaseResponse）
+
+
+
+// 定义登录服务的 gRPC 接口
+service LoginService {
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Register(LoginRequest) returns (LoginResponse); // 注册请求参数同登录
+  rpc Logout(LogoutRequest) returns (BaseResponse);
+  rpc ValidateToken(BaseRequest) returns (BaseResponse);
+  rpc RefreshToken(BaseRequest) returns (BaseResponse);
+}
+
+
+// protoc --go_out=pkg/login_proto --go_opt=paths=source_relative --go-grpc_out=pkg/login_proto --go-grpc_opt=paths=source_relative proto/login.proto
