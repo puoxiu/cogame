@@ -1,0 +1,40 @@
+syntax = "proto3";
+package gateway_proto;
+
+option go_package = "github.com/puoxiu/cogame/pkg/gateway_proto";
+
+// 已有的基础消息（保留并补充）
+message MessageHeader {
+  uint32 msg_id = 1;
+  uint32 seq = 2;
+  uint64 user_id = 3;
+  uint32 timestamp = 4;
+  string session_id = 5;
+}
+
+message BaseRequest {
+  MessageHeader header = 1;
+  bytes data = 2;
+}
+
+message BaseResponse {
+  MessageHeader header = 1;
+  int32 code = 2;
+  string msg = 3;
+  bytes data = 4;
+}
+
+
+// 网关服务接口定义
+service GatewayService {
+  // 获取连接数
+  rpc GetConnectionCount (BaseRequest) returns (BaseResponse);
+  // 发送消息给指定用户
+  rpc SendToUser (BaseRequest) returns (BaseResponse);
+  // 广播消息
+  rpc BroadcastMessage (BaseRequest) returns (BaseResponse);
+  // 踢出用户
+  rpc KickUser (BaseRequest) returns (BaseResponse);
+}
+
+// protoc --go_out=pkg/gateway_proto --go_opt=paths=source_relative --go-grpc_out=pkg/gateway_proto --go-grpc_opt=paths=source_relative proto/gateway.proto

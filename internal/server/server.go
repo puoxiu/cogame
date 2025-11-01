@@ -4,10 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/puoxiu/cogame/internal/actor"
@@ -47,6 +44,12 @@ type ServerConfig struct {
 	ETCD discovery.ETCDConfig `mapstructure:"etcd"`
 
 	Log logger.LogConfig `mapstructure:"log"`
+
+
+	Nodes map[string]struct {
+		Count int   `mapstructure:"count"`
+		Ports []int `mapstructure:"ports"`
+	} `mapstructure:"nodes"`
 }
 
 // Server 服务器接口
@@ -128,7 +131,8 @@ func NewServer(configFile, nodeType, nodeID string) Server {
 	switch nodeType {
 	case "login":
 		return NewLoginServer(configFile, nodeID)
-
+	case "gateway":
+		return NewGatewayServer(configFile, nodeID)
 	default:
 		logger.Fatal(fmt.Sprintf("Unknown node type: %s", nodeType))
 		return nil
@@ -228,7 +232,7 @@ func (bs *BaseServer) Start() error {
 	// 	return fmt.Errorf("failed to start rpc server: %v", err)
 	// }
 	// 启动gRPC服务器
-	logger.Debug(fmt.Sprintf("Starting gRPC server on port %d", bs.config.Network.RPCPort))
+	logger.Debug(fmt.Sprintf("正在启动 gRPC 服务器，监听端口 %d", bs.config.Network.RPCPort))
 	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", bs.config.Network.RPCPort))
 	if err != nil {
 		return fmt.Errorf("failed to listen gRPC port: %v", err)
@@ -236,14 +240,17 @@ func (bs *BaseServer) Start() error {
 	bs.wg.Add(1)
 	go func() {
 		defer bs.wg.Done()
+		logger.Debug("gRPC goroutine 开始启动...")
 		if err := bs.grpcServer.Serve(lis); err != nil {
 			logger.Error(fmt.Sprintf("Failed to serve gRPC: %v", err))
+		} else {
+			logger.Debug("gRPC goroutine 运行结束")
 		}
 	}()
-	logger.Debug(fmt.Sprintf("gRPC server started on port %d", bs.config.Network.RPCPort))
+	logger.Debug(fmt.Sprintf("gRPC server 启动完成，监听端口 %d", bs.config.Network.RPCPort))
 
 	// 服务与注册
-	logger.Debug("Registering service with discovery")
+	logger.Debug("正在注册服务到发现中心...")
 	serviceInfo := &discovery.ServiceInfo{
 		NodeID:     bs.nodeID,
 		NodeType:   bs.nodeType,
@@ -258,18 +265,22 @@ func (bs *BaseServer) Start() error {
 	if err := bs.registry.Register(serviceInfo); err != nil {
 		return fmt.Errorf("failed to register service with discovery: %v", err)
 	}
-	logger.Debug("Service registered with discovery")
+	logger.Debug("服务已成功注册到发现中心")
 
 	// 启动负载更新
 	bs.wg.Add(1)
 	go bs.loadUpdateLoop()
 
 	// 监听系统信号
-	bs.wg.Add(1)
-	go bs.signalHandler()
+	// bs.wg.Add(1)
+	// go bs.signalHandler()
 
 	bs.status = "running"
+	logger.Debug("服务器状态已切换为 running")
 	logger.Info(fmt.Sprintf("Server %s/%s started", bs.nodeType, bs.nodeID))
+
+	// 阻塞直到 Stop() 被调用
+	// bs.wg.Wait()
 
 	return nil
 }
@@ -353,6 +364,13 @@ func (bs *BaseServer) GetStatus() string {
 // loadUpdateLoop 负载更新循环
 func (bs *BaseServer) loadUpdateLoop() {
 	defer bs.wg.Done()
+	defer func() {
+        if r := recover(); r != nil {
+            logger.Error(fmt.Sprintf("loadUpdateLoop panic: %v", r))
+        }
+	}()
+
+	logger.Debug("loadUpdateLoop goroutine 开始运行...")
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -369,6 +387,7 @@ func (bs *BaseServer) loadUpdateLoop() {
 			}
 
 		case <-bs.ctx.Done():
+			logger.Debug("loadUpdateLoop goroutine 运行结束")
 			return
 		}
 	}
@@ -401,21 +420,22 @@ func (bs *BaseServer) calculateLoad() int {
 }
 
 // signalHandler 信号处理
-func (bs *BaseServer) signalHandler() {
-	defer bs.wg.Done()
+// func (bs *BaseServer) signalHandler() {
+// 	sigChan := make(chan os.Signal, 1)
+// 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+// 	logger.Debug("signalHandler  开始运行...")
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+// 	select {
+// 	case sig := <-sigChan:
+// 		logger.Info(fmt.Sprintf("Received signal %v, shutting down...", sig))
+// 		bs.Stop()
 
-	select {
-	case sig := <-sigChan:
-		logger.Info(fmt.Sprintf("Received signal %v, shutting down...", sig))
-		bs.Stop()
+// 	case <-bs.ctx.Done():
+// 		logger.Debug("signalHandler  运行结束")
+// 		return
+// 	}
+// }
 
-	case <-bs.ctx.Done():
-		return
-	}
-}
 
 // GetGRPCServer 返回gRPC服务器，供业务服务注册
 func (bs *BaseServer) GetGRPCServer() *grpc.Server {

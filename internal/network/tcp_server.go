@@ -113,6 +113,8 @@ func (s *TCPServer) acceptLoop() {
 
 	for s.running {
 		conn, err := s.listener.Accept()
+		remoteAddr := conn.RemoteAddr().String()
+		logger.Debug(fmt.Sprintf("新的连接 %s", remoteAddr))
 		if err != nil {
 			if s.running {
 				logger.Error(fmt.Sprintf("Accept error: %v", err))
@@ -143,7 +145,7 @@ func (s *TCPServer) acceptLoop() {
 		}
 
 		s.connections.Store(connID, connection)
-		logger.Debug(fmt.Sprintf("New connection %d from %s", connID, conn.RemoteAddr()))
+		logger.Debug(fmt.Sprintf("新的连接2 %d %s", connID, remoteAddr))
 
 		s.wg.Add(1)
 		go s.handleConnection(connection)
@@ -156,20 +158,21 @@ func (s *TCPServer) handleConnection(conn *Connection) {
 		conn.Close()                          // 1. 关闭底层连接
 		s.connections.Delete(conn.ID)         // 2. 从活跃连接列表中移除
 		s.connPool.Put(conn)                  // 3. 将Connection对象归还连接池（供复用）
-		logger.Debug(fmt.Sprintf("Connection %d closed", conn.ID))  // 4. 输出关闭日志
+		logger.Debug(fmt.Sprintf("连接 %d 已关闭", conn.ID))  // 4. 输出关闭日志
 		s.wg.Done()                           // 5. 通知WaitGroup：该连接的goroutine已完成
 	}()
 
 	conn.Conn.SetReadDeadline(time.Now().Add(s.readTimeout))
 	conn.Conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 
+	logger.Debug(fmt.Sprintf("开始处理连接 %d", conn.ID))
 	for !conn.IsClosed() && s.running {
 		// 读取消息长度前缀（4字节，大端序：表示后续消息体的字节数）-- 防止粘包
 		lengthBuf := make([]byte, 4)  // 4字节足够存储最大1MB的消息（1MB=1024*1024=1048576，4字节最大可表示4GB）
 		if _, err := conn.Read(lengthBuf); err != nil {
 			// 只有连接未关闭时，才输出错误（正常关闭的错误无需关注）
 			if !conn.IsClosed() {
-				logger.Debug(fmt.Sprintf("Read length error for connection %d: %v", conn.ID, err))
+				logger.Debug(fmt.Sprintf("连接 %d 读取长度失败: %v", conn.ID, err))
 			}
 			break  // 读取长度失败，退出循环（触发defer清理）
 		}
@@ -178,6 +181,8 @@ func (s *TCPServer) handleConnection(conn *Connection) {
 		// 原理：lengthBuf[0]是最高位（2^24），lengthBuf[3]是最低位（2^0）
 		msgLen := uint32(lengthBuf[0])<<24 | uint32(lengthBuf[1])<<16 | uint32(lengthBuf[2])<<8 | uint32(lengthBuf[3])
 
+		logger.Debug(fmt.Sprintf("连接 %d 读取到消息长度 %d", conn.ID, msgLen))
+		
 		// 4. 检查消息长度合法性（防止恶意攻击：如超大消息耗尽内存）
 		if msgLen == 0 || msgLen > 1024*1024 {  // 最小0字节（非法），最大1MB
 			logger.Warn(fmt.Sprintf("Invalid message length %d for connection %d", msgLen, conn.ID))

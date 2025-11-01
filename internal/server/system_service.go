@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"github.com/puoxiu/cogame/internal/logger"
 	"github.com/puoxiu/cogame/internal/mq"
 	"github.com/puoxiu/cogame/internal/pool"

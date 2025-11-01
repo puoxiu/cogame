@@ -94,4 +94,15 @@ services:
     networks:
       - co-network
 
+  nsqadmin:
+    image: nsqio/nsq:v1.2.1
+    container_name: co-nsqadmin
+    command: /nsqadmin --lookupd-http-address=nsqlookupd:4161
+    ports:
+      - "4171:4171"
+    depends_on:
+      - nsqlookupd
+    networks:
+      - co-network
+
   # co

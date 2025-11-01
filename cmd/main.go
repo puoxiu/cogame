@@ -4,12 +4,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/puoxiu/cogame/internal/logger"
 	"github.com/puoxiu/cogame/internal/server"
 )
 
 // go run cmd/main.go -config=config/config.yaml -node=login -id=login1
+// go run cmd/main.go -config=config/config.yaml -node=gateway -id=gateway1
 
 
 
@@ -31,7 +34,10 @@ func main() {
 	if err := srv.Start(); err != nil {
 		logger.Fatal(fmt.Sprintf("Failed to start server: %v", err))
 	}
-	
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+	logger.Info("Received signal, shutting down...")
+	srv.Stop()
 }
-
-
