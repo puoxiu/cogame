@@ -42,7 +42,7 @@ func NewGatewayServer(configFile, nodeID string) *GatewayServer {
 		gatewayServer.messageHandler,       // 绑定消息处理器（接收到消息后交给它处理）
 		baseServer.config.Network.MaxConnections, // 最大连接数（防止过载）
 	)
-	gatewayServer.tcpServer = tcpServer
+	gatewayServer.BaseServer.tcpServer = tcpServer
 
 	// 4. 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
@@ -84,9 +84,10 @@ func (gs *GatewayServer) Start() error {
 
 // Stop 停止网关服务器
 func (gs *GatewayServer) Stop() error {
-	if gs.tcpServer != nil {
-		gs.tcpServer.Stop()
-	}
+	// BaseServer中已经实现了tcpServer的Stop，这里不需要重复实现
+	// if gs.tcpServer != nil {
+	// 	gs.tcpServer.Stop()
+	// }
 
 	return gs.BaseServer.Stop()
 }

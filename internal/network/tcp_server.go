@@ -63,6 +63,7 @@ func NewTCPServer(address string, port int, handler MessageHandler, maxConns int
 
 // Start 启动TCP服务器
 func (s *TCPServer) Start() error {
+	logger.Debug(fmt.Sprintf("正在启动 TCP 服务器 %s:%d", s.address, s.port))
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.address, s.port))
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s:%d: %v", s.address, s.port, err)

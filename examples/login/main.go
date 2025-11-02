@@ -287,14 +287,6 @@ func runClient() {
 func main() {
 	fmt.Println("=== Lufy Game Client Demo ===")
 
-	// 检查服务器是否可用
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:8001", 5*time.Second)
-	if err != nil {
-		log.Fatalf("Server not available at 127.0.0.1:8001: %v", err)
-	}
-	conn.Close()
-
-	log.Println("Server is available, starting client demo...")
 	runClient()
 
 	log.Println("Client demo completed!")
