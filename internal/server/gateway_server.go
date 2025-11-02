@@ -159,11 +159,11 @@ func (gmh *GatewayMessageHandler) HandleMessage(conn *network.Connection, data [
 // 对于登录（1001）、心跳（1002）、登出（1003）消息，网关会直接处理；其他消息（ 2000~7000 区间的消息）会由网关转发到对应的服务
 func (gmh *GatewayMessageHandler) routeMessage(conn *network.Connection, msgID uint32, request *gateway_proto.BaseRequest) error {
 	switch msgID {
-	case 1001: // 用户登录
+	case 1001:
 		return gmh.handleLogin(conn, request)
-	case 1002: // 心跳
+	case 1002: 
 		return gmh.handleHeartbeat(conn, request)
-	case 1003: // 用户登出
+	case 1003:
 		return gmh.handleLogout(conn, request)
 	default:
 		// 转发到其他服务器
@@ -225,6 +225,7 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 func (gmh *GatewayMessageHandler) handleHeartbeat(conn *network.Connection, request *gateway_proto.BaseRequest) error {
 	// 更新连接活动时间
 	conn.LastActivity = time.Now()
+	logger.Debug(fmt.Sprintf("收到心跳，更新连接 %d 活动时间为 %s", conn.ID, conn.LastActivity))
 
 	// 发送心跳响应
 	return gmh.sendResponse(conn, request, 0, "pong", nil)
@@ -232,8 +233,10 @@ func (gmh *GatewayMessageHandler) handleHeartbeat(conn *network.Connection, requ
 
 // handleLogout 处理登出
 func (gmh *GatewayMessageHandler) handleLogout(conn *network.Connection, request *gateway_proto.BaseRequest) error {
+	logger.Debug(fmt.Sprintf("收到登出请求: %v, 现在需要解析data", request))
 	if conn.UserID != 0 {
 		// 设置用户离线
+		logger.Debug(fmt.Sprintf("设置用户 %d 离线, cache-redis", conn.UserID))
 		userCache := cache.NewUserCache(gmh.gatewayServer.BaseServer.redisManager)
 		userCache.SetUserOffline(conn.UserID)
 

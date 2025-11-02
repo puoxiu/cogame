@@ -13,6 +13,7 @@ import (
 
 // go run cmd/main.go -config=config/config.yaml -node=login -id=login1
 // go run cmd/main.go -config=config/config.yaml -node=gateway -id=gateway1
+// go run cmd/main.go -config=config/config.yaml -node=center -id=center1
 
 
 

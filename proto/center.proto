@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package center_proto;
+
+option go_package = "github.com/puoxiu/cogame/pkg/center_proto";
+// 已有的基础消息（保留并补充）
+message MessageHeader {
+  uint32 msg_id = 1;
+  uint32 seq = 2;
+  uint64 user_id = 3;
+  uint32 timestamp = 4;
+  string session_id = 5;
+}
+
+message BaseRequest {
+  MessageHeader header = 1;
+  bytes data = 2;
+}
+
+message BaseResponse {
+  MessageHeader header = 1;
+  int32 code = 2;
+  string msg = 3;
+  bytes data = 4;
+}
+
+
+
+
+// 服务信息
+message ServiceInfo {
+  string service_id = 1;   // 服务ID (对应原NodeID)
+  string service_type = 2; // 服务类型 (对应原NodeType)
+  string address = 3;      // 服务地址
+  int32 port = 4;          // 服务端口
+  string status = 5;       // 状态 (online/offline)
+  uint32 last_heartbeat = 6; // 最后心跳时间
+}
+// 服务列表响应
+message ServiceListResponse {
+  repeated ServiceInfo services = 1;  // 服务列表
+  int32 total = 2;                    // 总数量
+}
+
+
+// 系统信息
+message SystemInfo {
+  float cpu_usage = 1;     // CPU使用率
+  float memory_usage = 2;  // 内存使用率
+  float disk_usage = 3;    // 磁盘使用率
+  uint32 uptime = 4;       // 运行时间(秒)
+}
+// 集群状态响应
+message ClusterStatusResponse {
+  int32 total_services = 1;      // 总服务数
+  int32 online_services = 2;     // 在线服务数
+  map<string, int32> service_stats = 3; // 服务类型统计
+  SystemInfo system_info = 4;    // 系统信息
+  int32 code = 5;                // 状态码 0=成功
+  string message = 6;            // 消息描述
+}
+
+
+// 广播消息请求
+message BroadcastMessageRequest {
+  string message_type = 1;       // 消息类型
+  string content = 2;            // 消息内容
+  repeated string target_services = 3; // 目标服务类型列表
+}
+
+// 通用响应
+message CommonResponse {
+  int32 code = 1;                // 状态码 0=成功
+  string message = 2;            // 消息描述
+  bytes data = 3;                // 附加数据
+}
+
+// 服务操作请求 (关闭/重启)
+message ServiceOperationRequest {
+  string service_id = 1;         // 服务ID (可选)
+  string service_type = 2;       // 服务类型 (可选)
+  string operation = 3;          // 操作类型 (close/restart)
+}
+
+
+// 中心服务定义
+service CenterService {
+  // 获取服务列表
+  rpc GetServiceList (BaseRequest) returns (ServiceListResponse);
+  // 获取集群状态
+  rpc GetClusterStatus (BaseRequest) returns (ClusterStatusResponse);
+  // 广播消息
+  rpc BroadcastMessage (BroadcastMessageRequest) returns (CommonResponse);
+  // 关闭服务
+  rpc ShutdownService (ServiceOperationRequest) returns (CommonResponse);
+  // 重启服务
+  rpc RestartService (ServiceOperationRequest) returns (CommonResponse);
+}
+
+
+// protoc --go_out=pkg/center_proto --go_opt=paths=source_relative --go-grpc_out=pkg/center_proto --go-grpc_opt=paths=source_relative proto/center.proto

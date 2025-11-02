@@ -269,17 +269,17 @@ func runClient() {
 	}
 
 	// 发送几次心跳
-	// for i := 0; i < 3; i++ {
-	// 	time.Sleep(2 * time.Second)
-	// 	if err := client.SendHeartbeat(); err != nil {
-	// 		log.Printf("Heartbeat failed: %v", err)
-	// 	}
-	// }
+	for i := 0; i < 3; i++ {
+		time.Sleep(2 * time.Second)
+		if err := client.SendHeartbeat(); err != nil {
+			log.Printf("Heartbeat failed: %v", err)
+		}
+	}
 
 	// 登出
-	// if err := client.Logout(); err != nil {
-	// 	log.Printf("Logout failed: %v", err)
-	// }
+	if err := client.Logout(); err != nil {
+		log.Printf("Logout failed: %v", err)
+	}
 
 	time.Sleep(1 * time.Second)
 }
