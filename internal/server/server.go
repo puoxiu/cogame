@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
@@ -81,6 +84,10 @@ type BaseServer struct {
 	registry      *discovery.ETCDRegistry
 	// rpcServer     *rpc.RPCServer
 	grpcServer     *grpc.Server
+	nodes          map[string]struct {
+		Count int   `mapstructure:"count"`
+		Ports []int `mapstructure:"ports"`
+	} `mapstructure:"nodes"`
 
 	// 上下文
 	ctx    context.Context
@@ -93,14 +100,16 @@ type BaseServer struct {
 // NewBaseServer 创建基础服务器
 func NewBaseServer(configFile, nodeType, nodeID string) (*BaseServer, error) {
 	// 加载配置
-	config, err := loadConfig(configFile)
-
+	config, err := loadConfig(configFile, nodeType, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
 
 	// 初始化日志
 	logger.InitGlobalLogger(&config.Log)
+
+	logger.Debug(fmt.Sprintf("当前运行服务：%s, 服务ID: %s, TCP端口: %d, RPC端口: %d, HTTP端口: %d",
+		nodeType, nodeID, config.Network.TCPPort, config.Network.RPCPort, config.Network.HTTPPort))
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -138,7 +147,6 @@ func NewServer(configFile, nodeType, nodeID string) Server {
 		return nil
 	}
 }
-
 
 // initComponents 初始化组件
 func (bs *BaseServer) initComponents() error {
@@ -200,7 +208,7 @@ func (bs *BaseServer) initComponents() error {
 
 
 // loadConfig 加载配置文件
-func loadConfig(configFile string) (*ServerConfig, error) {
+func loadConfig(configFile, nodeType, nodeID string) (*ServerConfig, error) {
 	viper.SetConfigFile(configFile)
 	viper.SetConfigType("yaml")
 
@@ -212,6 +220,32 @@ func loadConfig(configFile string) (*ServerConfig, error) {
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, err
 	}
+
+	// 根据不同服务更新端口
+	re := regexp.MustCompile(`(\d+)$`)
+	matches := re.FindStringSubmatch(nodeID)
+	if len(matches) == 0 {
+		return nil, errors.New("format of nodeID must be like gateway1, login1...")
+	}
+	index, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return nil, fmt.Errorf("error: parse nodeID number: %v", err)
+	}
+	index-- // 转换为0开始的索引
+
+	nodeConfig, ok := config.Nodes[nodeType]
+	if !ok {
+		return nil, fmt.Errorf("error: node type %s not found in config", nodeType)
+	}
+
+	if index < 0 || index >= len(nodeConfig.Ports) {
+		return nil, fmt.Errorf("error: index %d out of range for node type %s", index+1, nodeType)
+	}
+
+	basePort := nodeConfig.Ports[index]
+	config.Network.TCPPort = basePort			// 基础端口即TCP端口
+	config.Network.RPCPort = basePort + 1000	// RPC端口偏移量为1000
+	config.Network.HTTPPort = basePort + 2000	// HTTP端口偏移量为2000
 
 	return &config, nil
 }

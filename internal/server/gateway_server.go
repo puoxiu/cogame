@@ -168,7 +168,7 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 
 	// TODO: 通过RPC调用登录服务
 	// 简化实现：直接返回成功响应
-	logger.Info(fmt.Sprintf("Login request for user: %s", loginReq.Username))
+	logger.Debug(fmt.Sprintf("登录服务存在,登录请求成功, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
 
 	// 模拟登录成功响应
 	loginResp := login_proto.LoginResponse{
