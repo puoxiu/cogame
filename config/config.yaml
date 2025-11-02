@@ -54,7 +54,7 @@ redis:
     
 mongodb:
   # 单机模式
-  uri: "mongodb://127.0.0.1:27017"
+  uri: "mongodb://co_user:co_password123@127.0.0.1:27017"
   database: "co_game"
   
   # 副本集模式配置（可选）
@@ -64,9 +64,9 @@ mongodb:
     - "127.0.0.1:27017"
     - "127.0.0.1:27018"
     - "127.0.0.1:27019"
-  auth_source: "admin"
-  username: ""
-  password: ""
+  auth_source: "co_game"
+  username: "co_user"
+  password: "co_password123"
   
   # 分片集群模式配置（可选）
   sharded_cluster: false

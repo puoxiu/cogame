@@ -2,13 +2,13 @@
 print('开始初始化单机MongoDB...');
 
 // 切换到应用数据库
-var gameDB = db.getSiblingDB('lufy_game');
+var gameDB = db.getSiblingDB('co_game');
 
 // 创建应用用户（代码中使用该用户连接）
 var appResult = gameDB.createUser({
-    user: 'lufy_user',
-    pwd: 'lufy_password123',
-    roles: [{ role: 'readWrite', db: 'lufy_game' }]
+    user: 'co_user',
+    pwd: 'co_password123',
+    roles: [{ role: 'readWrite', db: 'co_game' }]
 });
 print('应用用户创建结果:', JSON.stringify(appResult));
 

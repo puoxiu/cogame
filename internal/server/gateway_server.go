@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"github.com/puoxiu/cogame/internal/actor"
 	"github.com/puoxiu/cogame/internal/cache"
 	"github.com/puoxiu/cogame/internal/logger"
 	"github.com/puoxiu/cogame/internal/network"
 	gateway_proto "github.com/puoxiu/cogame/pkg/gateway_proto/proto"
 	login_proto "github.com/puoxiu/cogame/pkg/login_proto/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 
@@ -19,6 +21,7 @@ import (
 type GatewayServer struct {
 	*BaseServer 
 	messageHandler *GatewayMessageHandler // 客户端消息处理器
+	loginClient    login_proto.LoginServiceClient
 }
 
 
@@ -32,8 +35,8 @@ func NewGatewayServer(configFile, nodeID string) *GatewayServer {
 	// 2. 初始化网关消息处理器
 	gatewayServer := &GatewayServer{
 		BaseServer:     baseServer,
-		messageHandler: &GatewayMessageHandler{server: baseServer},
 	}
+	gatewayServer.messageHandler = NewGatewayMessageHandler(gatewayServer)
 	
 	// 3. 初始化TCP服务器， 所有客户端连接都由网关处理
 	tcpServer := network.NewTCPServer(
@@ -45,7 +48,7 @@ func NewGatewayServer(configFile, nodeID string) *GatewayServer {
 	gatewayServer.BaseServer.tcpServer = tcpServer
 
 	// 4. 注册通用服务
-	if err := RegisterCommonServices(baseServer); err != nil {
+	if err = RegisterCommonServices(baseServer); err != nil {
 		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
 	}
 
@@ -56,9 +59,28 @@ func NewGatewayServer(configFile, nodeID string) *GatewayServer {
 
 	// 6. 创建网关Actror
 	gatewayActor := NewGatewayActor(gatewayServer)
-	if err := baseServer.actorSystem.SpawnActor(gatewayActor); err != nil {
+	if err = baseServer.actorSystem.SpawnActor(gatewayActor); err != nil {
 		logger.Fatal(fmt.Sprintf("Failed to spawn gateway actor: %v", err))
 	}
+
+	// 7. 创建登录服务客户端
+	loginService := gatewayServer.BaseServer.discovery.GetService("login")
+	if loginService == nil {
+		logger.Fatal("Login service not found in discovery")
+	}
+	serviceAddr := fmt.Sprintf("%s:%d", loginService.Address, loginService.Port)
+	logger.Debug(fmt.Sprintf("找到登陆rpc服务地址: %s", serviceAddr))
+
+	conn, err := grpc.NewClient(
+		serviceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to connect to login service: %v", err))
+	}
+	loginClient := login_proto.NewLoginServiceClient(conn)
+	gatewayServer.loginClient = loginClient
+	logger.Debug("登陆rpc服务客户端创建成功")
 
 	return gatewayServer
 }
@@ -98,13 +120,14 @@ func (gs *GatewayServer) Stop() error {
 
 // GatewayMessageHandler 网关消息处理器
 type GatewayMessageHandler struct {
-	server *BaseServer
+	// server *BaseServer
+	gatewayServer *GatewayServer
 }
 
 // NewGatewayMessageHandler 创建网关消息处理器
-func NewGatewayMessageHandler(server *BaseServer) *GatewayMessageHandler {
+func NewGatewayMessageHandler(gatewayServer *GatewayServer) *GatewayMessageHandler {
 	return &GatewayMessageHandler{
-		server: server,
+		gatewayServer: gatewayServer,
 	}
 }
 
@@ -160,7 +183,7 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 	logger.Debug(fmt.Sprintf("解析 LoginRequest, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
 
 	// 获取登录服务
-	loginService := gmh.server.discovery.GetService("login")
+	loginService := gmh.gatewayServer.BaseServer.discovery.GetService("login")
 	if loginService == nil {
 		logger.Debug("登录服务 它不存在")
 		return gmh.sendError(conn, request, -1, "login service not available")
@@ -168,23 +191,33 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 
 	// TODO: 通过RPC调用登录服务
 	// 简化实现：直接返回成功响应
-	logger.Debug(fmt.Sprintf("登录服务存在,登录请求成功, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
+	// logger.Debug(fmt.Sprintf("登录服务存在,登录请求成功, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
+	// 调用登录rpc服务
+	logger.Debug(fmt.Sprintf("调用登录rpc服务, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
+	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+	defer cancel()
+	loginResp, err := gmh.gatewayServer.loginClient.Login(ctx, &loginReq)
+	if err != nil {
+		logger.Error(fmt.Sprintf("调用登录rpc服务失败: %v", err))
+		return gmh.sendError(conn, request, -1, "login failed")
+	}
+	logger.Debug(fmt.Sprintf("登录rpc服务返回, userId = %d, token = %s", loginResp.UserId, loginResp.Token))
 
 	// 模拟登录成功响应
-	loginResp := login_proto.LoginResponse{
-		UserId: 12345,
-		Token:  "mock_token_" + loginReq.Username,
-	}
+	// loginResp := login_proto.LoginResponse{
+	// 	UserId: 12345,
+	// 	Token:  "mock_token_" + loginReq.Username,
+	// }
 
 	// 绑定连接到用户
 	conn.UserID = loginResp.UserId
 
 	// 设置用户在线状态
-	userCache := cache.NewUserCache(gmh.server.redisManager)
-	userCache.SetUserOnline(loginResp.UserId, gmh.server.nodeID)
+	userCache := cache.NewUserCache(gmh.gatewayServer.BaseServer.redisManager)
+	userCache.SetUserOnline(loginResp.UserId, gmh.gatewayServer.nodeID)
 
 	// 发送响应
-	return gmh.sendResponse(conn, request, 0, "login success", &loginResp)
+	return gmh.sendResponse(conn, request, 0, "login success", loginResp)
 }
 
 
@@ -201,7 +234,7 @@ func (gmh *GatewayMessageHandler) handleHeartbeat(conn *network.Connection, requ
 func (gmh *GatewayMessageHandler) handleLogout(conn *network.Connection, request *gateway_proto.BaseRequest) error {
 	if conn.UserID != 0 {
 		// 设置用户离线
-		userCache := cache.NewUserCache(gmh.server.redisManager)
+		userCache := cache.NewUserCache(gmh.gatewayServer.BaseServer.redisManager)
 		userCache.SetUserOffline(conn.UserID)
 
 		logger.Info(fmt.Sprintf("User %d logged out from connection %d", conn.UserID, conn.ID))
@@ -235,7 +268,7 @@ func (gmh *GatewayMessageHandler) forwardMessage(conn *network.Connection, msgID
 	}
 
 	// 获取目标服务实例
-	service := gmh.server.discovery.GetService(targetService)
+	service := gmh.gatewayServer.BaseServer.discovery.GetService(targetService)
 	if service == nil {
 		return gmh.sendError(conn, request, -2, fmt.Sprintf("%s service not available", targetService))
 	}

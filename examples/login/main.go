@@ -199,7 +199,7 @@ func (gc *GameClient) SendHeartbeat() error {
 	}
 
 	// 发送心跳消息
-	if err := gc.sendMessage(1002, reqData); err != nil {
+	if err = gc.sendMessage(1002, reqData); err != nil {
 		return fmt.Errorf("failed to send heartbeat: %v", err)
 	}
 
@@ -264,7 +264,7 @@ func runClient() {
 	defer client.Disconnect()
 
 	// 登录
-	if err := client.Login("testuser", "123456"); err != nil {
+	if err := client.Login("testuser", "123456789"); err != nil {
 		log.Fatalf("Login failed2: %v", err)
 	}
 

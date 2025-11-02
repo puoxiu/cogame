@@ -288,7 +288,7 @@ func (bs *BaseServer) Start() error {
 	serviceInfo := &discovery.ServiceInfo{
 		NodeID:     bs.nodeID,
 		NodeType:   bs.nodeType,
-		Address:    "0.0.0.0",
+		Address:    "127.0.0.1",
 		Port:       bs.config.Network.RPCPort,
 		Load:       0,
 		Status:     "online",
