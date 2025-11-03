@@ -1,6 +1,6 @@
 module github.com/puoxiu/cogame
 
-go 1.24
+go 1.24.0
 
 toolchain go1.24.9
 
@@ -14,6 +14,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.6.5
 	go.mongodb.org/mongo-driver v1.17.6
 	go.uber.org/zap v1.27.0
+	golang.org/x/time v0.14.0
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.9
 )
