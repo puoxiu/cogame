@@ -144,6 +144,8 @@ func NewServer(configFile, nodeType, nodeID string) Server {
 		return NewGatewayServer(configFile, nodeID)
 	case "center":
 		return NewCenterServer(configFile, nodeID)
+	case "lobby":
+		return NewLobbyServer(configFile, nodeID)
 	default:
 		logger.Fatal(fmt.Sprintf("Unknown node type: %s", nodeType))
 		return nil
