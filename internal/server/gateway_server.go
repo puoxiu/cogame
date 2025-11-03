@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/puoxiu/cogame/internal/actor"
@@ -16,7 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-
+const (
+	DefaultRate  = 10 // 每个IP/用户每秒最大10条消息
+	DefaultBurst = 50 // 每个IP/用户初始可突发50次
+)
 
 type GatewayServer struct {
 	*BaseServer 
@@ -44,6 +48,7 @@ func NewGatewayServer(configFile, nodeID string) *GatewayServer {
 		baseServer.config.Network.TCPPort,  // 从配置读TCP端口（如8080）
 		gatewayServer.messageHandler,       // 绑定消息处理器（接收到消息后交给它处理）
 		baseServer.config.Network.MaxConnections, // 最大连接数（防止过载）
+		baseServer.limiter, // 限流器
 	)
 	gatewayServer.BaseServer.tcpServer = tcpServer
 
@@ -158,6 +163,19 @@ func (gmh *GatewayMessageHandler) HandleMessage(conn *network.Connection, data [
 // routeMessage 路由消息
 // 对于登录（1001）、心跳（1002）、登出（1003）消息，网关会直接处理；其他消息（ 2000~7000 区间的消息）会由网关转发到对应的服务
 func (gmh *GatewayMessageHandler) routeMessage(conn *network.Connection, msgID uint32, request *gateway_proto.BaseRequest) error {
+	// 添加限流
+	var limitKey string
+	if conn.UserID > 0 {
+        limitKey = fmt.Sprintf("msg:user:%d", conn.UserID) // 已登录用户：按用户ID限流
+    } else {
+        clientIP, _, _ := net.SplitHostPort(conn.Conn.RemoteAddr().String())
+        limitKey = fmt.Sprintf("msg:ip:%s", clientIP) // 未登录：按IP限流
+    }
+	if !gmh.gatewayServer.limiter.CheckLimit(limitKey, DefaultRate, DefaultBurst) {
+		// 被限流，拒绝处理
+		return gmh.sendError(conn, request, -1, "exceeds max messages per second")
+	}
+
 	switch msgID {
 	case 1001:
 		return gmh.handleLogin(conn, request)
@@ -178,7 +196,9 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 	logger.Debug(fmt.Sprintf("收到登录请求: %v, 现在需要解析data", request))
 	var loginReq login_proto.LoginRequest
 	if err := proto.Unmarshal(request.Data, &loginReq); err != nil {
-		return fmt.Errorf("failed to unmarshal login request: %v", err)
+		// return fmt.Errorf("failed to unmarshal login request: %v", err)
+		logger.Error(fmt.Sprintf("解析登录请求失败: %v", err))
+		return gmh.sendError(conn, request, -1, "invalid login request")
 	}
 	logger.Debug(fmt.Sprintf("解析 LoginRequest, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
 
@@ -189,9 +209,6 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 		return gmh.sendError(conn, request, -1, "login service not available")
 	}
 
-	// TODO: 通过RPC调用登录服务
-	// 简化实现：直接返回成功响应
-	// logger.Debug(fmt.Sprintf("登录服务存在,登录请求成功, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
 	// 调用登录rpc服务
 	logger.Debug(fmt.Sprintf("调用登录rpc服务, username = %s, password = %s, platform = %s, version = %s", loginReq.Username, loginReq.Password, loginReq.Platform, loginReq.Version))
 	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
@@ -203,11 +220,6 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 	}
 	logger.Debug(fmt.Sprintf("登录rpc服务返回, userId = %d, token = %s", loginResp.UserId, loginResp.Token))
 
-	// 模拟登录成功响应
-	// loginResp := login_proto.LoginResponse{
-	// 	UserId: 12345,
-	// 	Token:  "mock_token_" + loginReq.Username,
-	// }
 
 	// 绑定连接到用户
 	conn.UserID = loginResp.UserId

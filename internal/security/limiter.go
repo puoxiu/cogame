@@ -17,7 +17,7 @@ type RateLimitManager struct {
 	stopChan      chan struct{}           // 停止清理协程的信号
 }
 
-// RateLimiter 令牌桶限流器：封装rate.Limiter及元数据
+// RateLimiter 令牌桶限流器(桶)：封装rate.Limiter及元数据
 type RateLimiter struct {
 	limiter     *rate.Limiter
 	rate        rate.Limit       // rps：每秒生成多少令牌

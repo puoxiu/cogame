@@ -10,10 +10,16 @@ import (
 
 	"github.com/puoxiu/cogame/internal/logger"
 	"github.com/puoxiu/cogame/internal/pool"
+	"github.com/puoxiu/cogame/internal/security"
+	"golang.org/x/time/rate"
+)
+
+const (
+	DefaultBurstPerIP = 5 // 默认每个IP最大突发连接数
+	DefaultRatePerIP = rate.Limit(5)  
 )
 
 // TCPServer TCP服务器核心类
-// 作用：整合连接管理、监听、心跳、消息发送等功能，提供服务器启动/停止的统一接口
 type TCPServer struct {
 	// 网络配置
 	address      string
@@ -36,10 +42,12 @@ type TCPServer struct {
 	handler      MessageHandler  // 消息处理器（业务层实现）
 	readTimeout  time.Duration   // 读超时（防止连接长时间无数据，阻塞Read）
 	writeTimeout time.Duration   // 写超时（防止写操作阻塞太久）
+	// 限流
+	limiter      *security.RateLimitManager    // 限流器
 }
 
 // NewTCPServer 创建TCP服务器实例
-func NewTCPServer(address string, port int, handler MessageHandler, maxConns int) *TCPServer {
+func NewTCPServer(address string, port int, handler MessageHandler, maxConns int, limiter *security.RateLimitManager) *TCPServer {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// 创建连接池：
@@ -57,6 +65,7 @@ func NewTCPServer(address string, port int, handler MessageHandler, maxConns int
 		ctx:          ctx,
 		cancel:       cancel,
 		connPool:     connPool,
+		limiter:      limiter,
 		// running默认=false（未启动），connections默认初始化（sync.Map零值可用）
 	}
 }
@@ -116,6 +125,15 @@ func (s *TCPServer) acceptLoop() {
 		conn, err := s.listener.Accept()
 		remoteAddr := conn.RemoteAddr().String()
 		logger.Debug(fmt.Sprintf("新的连接 %s", remoteAddr))
+		if clientIP, _, err := net.SplitHostPort(remoteAddr); err == nil {
+			// 检查是否超出限流阈值, 限制单IP最大连接数
+			if !s.limiter.CheckLimit("conn"+clientIP, DefaultRatePerIP, DefaultBurstPerIP) {
+				logger.Warn(fmt.Sprintf("IP %s exceeds max connections (%d), closing new connection", clientIP, DefaultBurstPerIP))
+            	conn.Close()
+				continue
+			}
+		}
+
 		if err != nil {
 			if s.running {
 				logger.Error(fmt.Sprintf("Accept error: %v", err))

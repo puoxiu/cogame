@@ -17,6 +17,7 @@ import (
 	"github.com/puoxiu/cogame/internal/logger"
 	"github.com/puoxiu/cogame/internal/mq"
 	"github.com/puoxiu/cogame/internal/network"
+	"github.com/puoxiu/cogame/internal/security"
 
 	// "github.com/puoxiu/cogame/internal/rpc"
 	system_proto "github.com/puoxiu/cogame/pkg/system_proto/proto"
@@ -82,8 +83,8 @@ type BaseServer struct {
 	messageBroker *mq.MessageBroker
 	discovery     *discovery.ServiceDiscovery
 	registry      *discovery.ETCDRegistry
-	// rpcServer     *rpc.RPCServer
 	grpcServer     *grpc.Server
+	limiter        *security.RateLimitManager
 	nodes          map[string]struct {
 		Count int   `mapstructure:"count"`
 		Ports []int `mapstructure:"ports"`
@@ -206,6 +207,10 @@ func (bs *BaseServer) initComponents() error {
 	grpcServer := grpc.NewServer()
 	bs.grpcServer = grpcServer
 	logger.Debug("gRPC server initialized")
+
+	// 初始化限流器
+	bs.limiter = security.NewRateLimitManager()
+	logger.Debug("Rate limit manager initialized")
 
 	return nil
 }
